@@ -1,0 +1,24 @@
+{
+  "name": "node-lotto",
+  "version": "1.0.0",
+  "description": "로또 수집",
+  "main": "lotto.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/goldtagworks/"
+  },
+  "keywords": [
+    "lotto",
+    "로또"
+  ],
+  "author": "jaewon.lee",
+  "license": "GNU",
+  "dependencies": {
+    "axios": "^0.19.0",
+    "mysql": "^2.17.1",
+    "await-sleep": "0.0.1"
+  }
+}
