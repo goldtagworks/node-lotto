@@ -25,7 +25,7 @@ class Tasker {
     }
 
     async getLotto(drwNo = 1) {
-        let url = 'https://www.nlotto.co.kr/common.do?method=getLottoNumber&drwNo=' + drwNo;
+        let url = 'https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=' + drwNo;
 
         return await axios.get(url, {
             headers: { 'Content-Type': 'application/json' },

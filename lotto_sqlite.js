@@ -1,6 +1,7 @@
 const https = require('https');
 const axios = require('axios');
 const sqlite3 = require('sqlite3').verbose();
+const sleep = require('await-sleep');
 
 class Tasker {
     constructor() {
@@ -45,7 +46,7 @@ class Tasker {
     }
 
     async getLotto(drwNo) {
-        const url = `https://www.nlotto.co.kr/common.do?method=getLottoNumber&drwNo=${drwNo}`;
+        const url = `https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=${drwNo}`;
 
         try {
             const response = await axios.get(url, {
@@ -121,28 +122,28 @@ class Tasker {
     async main() {
         await this.initialize();
 
-        const drwNo = await this.loadHistory();
-        const maxConcurrentRequests = 10; // Adjust the concurrency level
-        const promises = [];
+        let drwNo = await this.loadHistory();
+        const maxDrwNo = 1151;
 
-        for (let i = drwNo; i < 1151; i++) {
-            console.log(i);
-            promises.push(this.getLotto(i).then((data) => {
-                if (data) {
-                    return this.saveHistory(data);
+        while (drwNo <= maxDrwNo) {
+            console.log(`Fetching draw number ${drwNo}...`);
+
+            try {
+                const response = await this.getLotto(drwNo);
+                if (response) {
+                    console.log(`Saving draw number ${drwNo} to the database...`);
+                    await this.saveHistory(response);
                 }
-            }));
-
-            if (promises.length >= maxConcurrentRequests) {
-                await Promise.all(promises);
-                promises.length = 0; // Clear the array for next batch
+            } catch (err) {
+                console.error(`Failed to fetch or save draw number ${drwNo}: ${err}`);
             }
+
+            drwNo++;
+            await sleep(500); // Slight delay between requests
         }
 
-        // Wait for remaining promises to complete
-        await Promise.all(promises);
-
         await this.finalize();
+        console.log('Completed.');
     }
 }
 

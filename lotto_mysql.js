@@ -2,12 +2,11 @@ const util = require('util');
 const https = require('https');
 const axios = require('axios');
 const mysql = require('mysql');
+const sleep = require('await-sleep');
 
 class Tasker {
     constructor() {
         this.pool = null;
-        this.batchSize = 10; // Number of parallel requests
-        this.saveBatchSize = 50; // Number of records saved in a single query
     }
 
     async initialize() {
@@ -27,7 +26,7 @@ class Tasker {
     }
 
     async getLotto(drwNo) {
-        let url = `https://www.nlotto.co.kr/common.do?method=getLottoNumber&drwNo=${drwNo}`;
+        let url = `https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=${drwNo}`;
         return axios.get(url, {
             headers: { 'Content-Type': 'application/json' },
             responseType: 'json',
@@ -49,16 +48,14 @@ class Tasker {
         return result;
     }
 
-    async saveBatch(records) {
-        if (records.length === 0) return;
-
+    async saveHistory(data) {
         try {
             const sql = `
                 INSERT INTO history 
                 (drwNo, drwNoDate, drwtNo1, drwtNo2, drwtNo3, drwtNo4, drwtNo5, drwtNo6, bnusNo, firstWinamnt, firstPrzwnerCo, firstAccumamnt, totSellamnt) 
-                VALUES ?
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
-            const params = records.map(data => [
+            const params = [
                 data.drwNo,
                 data.drwNoDate,
                 data.drwtNo1,
@@ -72,30 +69,11 @@ class Tasker {
                 data.firstPrzwnerCo,
                 data.firstAccumamnt,
                 data.totSellamnt,
-            ]);
-            await this.pool.query(sql, [params]);
+            ];
+            await this.pool.query(sql, params);
         } catch (err) {
             console.error(err);
         }
-    }
-
-    async fetchBatch(start, end) {
-        const promises = [];
-        for (let i = start; i <= end; i++) {
-            promises.push(
-                this.getLotto(i)
-                    .then(response => {
-                        if (response.status === 200 && response.data.returnValue === 'success') {
-                            return response.data;
-                        }
-                        return null;
-                    })
-                    .catch(() => null)
-            );
-        }
-
-        const results = await Promise.all(promises);
-        return results.filter(data => data !== null);
     }
 
     async main() {
@@ -104,27 +82,21 @@ class Tasker {
         let drwNo = await this.loadHistory();
         const maxDrwNo = 1151;
 
-        let records = [];
         while (drwNo <= maxDrwNo) {
-            const end = Math.min(drwNo + this.batchSize - 1, maxDrwNo);
-            console.log(`Fetching draw numbers ${drwNo} to ${end}...`);
+            console.log(`Fetching draw number ${drwNo}...`);
 
-            const batchResults = await this.fetchBatch(drwNo, end);
-            records = records.concat(batchResults);
-
-            if (records.length >= this.saveBatchSize) {
-                console.log(`Saving ${records.length} records to the database...`);
-                await this.saveBatch(records);
-                records = [];
+            try {
+                const response = await this.getLotto(drwNo);
+                if (response.status === 200 && response.data.returnValue === 'success') {
+                    console.log(`Saving draw number ${drwNo} to the database...`);
+                    await this.saveHistory(response.data);
+                }
+            } catch (err) {
+                console.error(`Failed to fetch or save draw number ${drwNo}:`, err);
             }
 
-            drwNo = end + 1;
-        }
-
-        // Save remaining records
-        if (records.length > 0) {
-            console.log(`Saving final ${records.length} records to the database...`);
-            await this.saveBatch(records);
+            drwNo++;
+            await sleep(500); // Slight delay between requests
         }
 
         await this.finalize();

@@ -2,6 +2,7 @@ const https = require('https');
 const axios = require('axios');
 const fs = require('fs');
 const { createObjectCsvWriter } = require('csv-writer');
+const sleep = require('await-sleep');
 
 class Tasker {
     constructor() {
@@ -32,12 +33,21 @@ class Tasker {
     }
 
     async getLotto(drwNo) {
-        let url = `https://www.nlotto.co.kr/common.do?method=getLottoNumber&drwNo=${drwNo}`;
-        return axios.get(url, {
-            headers: { 'Content-Type': 'application/json' },
-            responseType: 'json',
-            httpsAgent: new https.Agent({ rejectUnauthorized: false })
-        });
+        const url = `https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=${drwNo}`;
+        try {
+            const response = await axios.get(url, {
+                headers: { 'Content-Type': 'application/json' },
+                responseType: 'json',
+                httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+            });
+
+            if (response.status === 200 && response.data.returnValue === 'success') {
+                return response.data;
+            }
+        } catch (err) {
+            console.error(`Failed to fetch data for draw number ${drwNo}: ${err.message}`);
+        }
+        return null;
     }
 
     async loadHistory() {
@@ -52,7 +62,7 @@ class Tasker {
                 }
             }
         } catch (err) {
-            throw new Error(err);
+            console.error(`Error loading history: ${err.message}`);
         }
 
         return result;
@@ -77,27 +87,7 @@ class Tasker {
             };
             await this.csvWriter.writeRecords([record]);
         } catch (err) {
-            throw new Error(err);
-        }
-    }
-
-    async fetchBatch(start, end) {
-        const promises = [];
-        for (let i = start; i <= end; i++) {
-            promises.push(
-                this.getLotto(i).then((response) => {
-                    if (response.status === 200 && response.data.returnValue === 'success') {
-                        return response.data;
-                    }
-                    return null;
-                })
-            );
-        }
-
-        const results = await Promise.all(promises);
-        const validResults = results.filter((data) => data !== null);
-        if (validResults.length > 0) {
-            await this.csvWriter.writeRecords(validResults);
+            console.error(`Error saving history for draw number ${data.drwNo}: ${err.message}`);
         }
     }
 
@@ -105,15 +95,26 @@ class Tasker {
         await this.initialize();
 
         let drwNo = await this.loadHistory();
-        const batchSize = 10; // Number of parallel requests
         const maxDrwNo = 1151;
 
-        while (drwNo < maxDrwNo) {
-            const end = Math.min(drwNo + batchSize - 1, maxDrwNo);
-            console.log(`Fetching draw numbers ${drwNo} to ${end}`);
-            await this.fetchBatch(drwNo, end);
-            drwNo = end + 1;
+        while (drwNo <= maxDrwNo) {
+            console.log(`Fetching draw number ${drwNo}...`);
+
+            try {
+                const response = await this.getLotto(drwNo);
+                if (response) {
+                    console.log(`Saving draw number ${drwNo} to CSV...`);
+                    await this.saveHistory(response);
+                }
+            } catch (err) {
+                console.error(`Failed to fetch or save draw number ${drwNo}: ${err}`);
+            }
+
+            drwNo++;
+            await sleep(500); // Slight delay between requests
         }
+
+        console.log('Completed.');
     }
 }
 
