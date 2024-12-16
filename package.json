@@ -17,8 +17,10 @@
   "author": "jaewon.lee",
   "license": "GNU",
   "dependencies": {
+    "await-sleep": "0.0.1",
     "axios": "^0.19.0",
+    "csv-writer": "^1.6.0",
     "mysql": "^2.17.1",
-    "await-sleep": "0.0.1"
+    "sqlite3": "^5.1.7"
   }
 }
